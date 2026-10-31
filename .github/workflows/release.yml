@@ -1,0 +1,51 @@
+# Run by hand from the Actions tab: bumps the version, checks and packs the plugin, commits the bump, tags it and
+# creates the GitHub release with the zflow-plugin.tgz asset the Studio installs.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+
+jobs:
+  release:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Bump the version
+        id: version
+        run: echo "tag=$(npm version ${{ inputs.bump }} --no-git-tag-version)" >> "$GITHUB_OUTPUT"
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+      - name: Check the package has the new version
+        run: test "v$(jq -r .version dist/zflow-plugin/zflow-plugin.json)" = "${{ steps.version.outputs.tag }}"
+      - name: Commit and tag the version
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $TAG"
+          git tag "$TAG"
+          git push origin "HEAD:$GITHUB_REF_NAME" "$TAG"
+      - run: gh release create "$TAG" dist/zflow-plugin.tgz --title "$TAG" --generate-notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

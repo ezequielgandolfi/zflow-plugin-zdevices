@@ -1,0 +1,27 @@
+{
+  "name": "zflow-plugin-zdevices",
+  "version": "0.1.0",
+  "private": true,
+  "description": "zflow plugin that keeps a project's Z Devices in the IoT device registry",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "package": "zflow-pack-plugin ."
+  },
+  "zflow": {
+    "sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "5.105.0",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@zflow/plugin-tools": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.0/zflow-plugin-tools-0.1.0.tgz",
+    "@zflow/sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.0/zflow-sdk-0.1.0.tgz",
+    "@zflow/studio-sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.0/zflow-studio-sdk-0.1.0.tgz",
+    "react": "19.3.1",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}
