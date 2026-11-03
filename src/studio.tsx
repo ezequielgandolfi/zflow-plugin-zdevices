@@ -632,7 +632,7 @@ function InfoSection({ device }: { device: ZDevice }) {
 }
 
 function LinksSection({ device }: { device: ZDevice }) {
-  const { DataTable } = studioHost();
+  const { Icon } = studioHost();
   if (device.links.length === 0) return null;
   const links = [...device.links].sort((a, b) => a.central.localeCompare(b.central));
   return (
@@ -641,15 +641,27 @@ function LinksSection({ device }: { device: ZDevice }) {
         <h2>Centrals</h2>
       </div>
       <p className="section-intro">How each central hears the device. It reports through the first one that answers it.</p>
-      <DataTable
-        rows={links}
-        rowKey={(link) => link.central}
-        columns={[
-          { label: 'Central', render: (link) => link.central },
-          { label: 'Link quality', numeric: true, render: (link) => link.linkquality ?? '—' },
-          { label: 'Last heard', render: (link) => formatTime(link.lastSeen) ?? '—' },
-        ]}
-      />
+      <div className="list">
+        {links.map((link) => (
+          <div key={link.central} className="list-row">
+            <span className="tile">
+              <Icon name="radio-tower" size={18} />
+            </span>
+            <span className="list-row-main">
+              <strong>{link.central}</strong>
+              <span className="list-row-meta">
+                {[
+                  link.linkquality !== undefined && `Link quality ${link.linkquality}`,
+                  link.lastSeen !== undefined && `Heard ${formatTime(link.lastSeen)}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Not heard yet'}
+              </span>
+            </span>
+            {device.details?.lastCentral === link.central && <span className="chip chip-accent">Last report</span>}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

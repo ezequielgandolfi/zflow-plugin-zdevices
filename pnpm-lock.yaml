@@ -18,14 +18,14 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@zflow/plugin-tools':
-        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz
-        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(react@19.3.1))
+        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz
+        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(react@19.3.1))
       '@zflow/sdk':
-        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz
-        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz
+        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz
+        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz
       '@zflow/studio-sdk':
-        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz
-        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(react@19.3.1)
+        specifier: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz
+        version: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(react@19.3.1)
       mqtt:
         specifier: ^5.16.1
         version: 5.16.1
@@ -360,23 +360,23 @@ packages:
   '@vitest/spy@5.0.5':
     resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
 
-  '@zflow/plugin-tools@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz':
-    resolution: {integrity: sha512-p8TaTNmKZ7J4CquUfRYbC6HcD++boXP9SrGxUQp4rGaJggjmnH3WB1fiXkgRE6ezdtOREQGeMWuVUd+W95jf0Q==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz}
-    version: 0.1.7
+  '@zflow/plugin-tools@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz':
+    resolution: {integrity: sha512-nMtni9axb0xHxBh/H18C129TjhQ3Ad0GlcTyPDbcAO/DwJXobxgJQWl84jecgnt1+JftgKSihFNZex/nUaMkvQ==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz}
+    version: 0.1.10
     hasBin: true
     peerDependencies:
-      '@zflow/sdk': 0.1.7
-      '@zflow/studio-sdk': 0.1.7
+      '@zflow/sdk': 0.1.10
+      '@zflow/studio-sdk': 0.1.10
 
-  '@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz':
-    resolution: {integrity: sha512-6HBoMrqpSoxFgJpavboMJjO1wmxxLyB8AK0SfKmTSgPJyJw/re2PFgA6wWINea+d/a9jbGyMh7a451Cl0xAygQ==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz}
-    version: 0.1.7
+  '@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz':
+    resolution: {integrity: sha512-6k5TgsV8DdwlKZuxJ8+IiaWHMfFxBbE14Mo78bV30RkCbBNVqKoA2ibAxGGcd1AvEQmpwcC7qGZDAOk3DenWVg==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz}
+    version: 0.1.10
 
-  '@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz':
-    resolution: {integrity: sha512-RixpdfFbBDVuoFDVs5FBW0TVYhRQa9jN4++QcJ936fxOl76kbTopECqr4s+vMl/+nyi5+IPUDjFeZjqcYW3DwA==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz}
-    version: 0.1.7
+  '@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz':
+    resolution: {integrity: sha512-GaYpP4NpMrxLrAcMGO5DV4VY7Ro6axEa65/XOVL8MBMdQzmpeo6vR/BvOhxUp427ydldm0EFM8k2Y93S9pCC8Q==, tarball: https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz}
+    version: 0.1.10
     peerDependencies:
-      '@zflow/sdk': 0.1.7
+      '@zflow/sdk': 0.1.10
       react: ^19.0.0
 
   abort-controller@3.0.0:
@@ -975,17 +975,17 @@ snapshots:
 
   '@vitest/spy@5.0.5': {}
 
-  '@zflow/plugin-tools@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(react@19.3.1))':
+  '@zflow/plugin-tools@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(react@19.3.1))':
     dependencies:
-      '@zflow/sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz
-      '@zflow/studio-sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(react@19.3.1)
+      '@zflow/sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz
+      '@zflow/studio-sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(react@19.3.1)
       esbuild: 0.28.2
 
-  '@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz': {}
+  '@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz': {}
 
-  '@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz)(react@19.3.1)':
+  '@zflow/studio-sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz(@zflow/sdk@https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz)(react@19.3.1)':
     dependencies:
-      '@zflow/sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz
+      '@zflow/sdk': https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz
       react: 19.3.1
 
   abort-controller@3.0.0:
