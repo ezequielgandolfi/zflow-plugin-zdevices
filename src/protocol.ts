@@ -1,4 +1,4 @@
-// MQTT side of Z Devices protocol v2 (docs/z-protocol-v2.md, section 4).
+// MQTT side of Z Devices protocol v2 (firmware PROTOCOL.md, section 3).
 
 export const ROOT = 'zdevices';
 
@@ -18,6 +18,7 @@ export const topics = {
   relays: (central: string) => `${ROOT}/${central}/bridge/config/devices`,
   seenRequest: (central: string) => `${ROOT}/${central}/bridge/request/seen`,
   restart: (central: string) => `${ROOT}/${central}/bridge/request/restart`,
+  command: (central: string, device: string) => `${ROOT}/${central}/${device}/set`,
 };
 
 export interface CentralInfo {
@@ -27,6 +28,8 @@ export interface CentralInfo {
   mac?: string;
   ip?: string;
   relaying?: number;
+  /** Devices with a command waiting for their receive window. */
+  pending?: number;
   dropped?: number;
   uptime?: number;
 }
@@ -97,6 +100,7 @@ function parseInfo(payload: Record<string, unknown>): CentralInfo {
     mac: text(payload.mac),
     ip: text(payload.ip),
     relaying: number(payload.relaying),
+    pending: number(payload.pending),
     dropped: number(payload.dropped),
     uptime: number(payload.uptime),
   });

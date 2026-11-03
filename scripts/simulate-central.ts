@@ -11,8 +11,13 @@ interface FakeDevice {
   model: number;
   interval: number;
   batteryPowered: boolean;
-  values: () => Record<string, number | boolean>;
+  values: () => Record<string, number | boolean | string>;
 }
+
+// The switch's state, changed only by commands, and the commands waiting for each device's receive window.
+let switchState = 'OFF';
+const WRITABLE = new Set(['state']);
+const pending = new Map<string, Record<string, unknown>>();
 
 const around = (value: number, spread: number) => Math.round((value + (Math.random() - 0.5) * spread) * 10) / 10;
 
@@ -33,6 +38,7 @@ const DEVICES: FakeDevice[] = [
     values: () => ({ power: around(320, 80), voltage: around(220, 4), current: around(1.4, 0.4), energy: 1234.5, ac_frequency: 50, power_factor: 0.94 }),
   },
   { id: 'a0b765000104', model: 0x0104, interval: 60, batteryPowered: true, values: () => ({ distance: around(42, 3), battery: 91 }) },
+  { id: 'a0b765000105', model: 0x0105, interval: 30, batteryPowered: true, values: () => ({ state: switchState, battery: 78 }) },
 ];
 
 let relayed = new Set<string>();
@@ -59,6 +65,7 @@ const ping = () =>
       mac: 'a0:b7:65:00:00:00',
       ip: '127.0.0.1',
       relaying: relayed.size,
+      pending: pending.size,
       dropped: 0,
       uptime: Math.round((Date.now() - startedAt) / 1000),
     },
@@ -69,7 +76,7 @@ client.on('connect', () => {
   console.log(`${central} connected to ${url}`);
   send('bridge/state', { state: 'online' }, true);
   ping();
-  client.subscribe([`${base}/bridge/config/devices`, `${base}/bridge/request/+`], { qos: 1 });
+  client.subscribe([`${base}/bridge/config/devices`, `${base}/bridge/request/+`, `${base}/+/set`], { qos: 1 });
 });
 
 client.on('message', (topic, buffer) => {
@@ -94,6 +101,12 @@ client.on('message', (topic, buffer) => {
     send('bridge/response/seen', { status: 'ok', transaction: payload.transaction, data });
   } else if (topic === `${base}/bridge/request/restart`) {
     console.log('Restart asked; ignoring it');
+  } else if (topic.endsWith('/set')) {
+    const id = topic.slice(base.length + 1, -'/set'.length);
+    const values = Object.fromEntries(Object.entries(payload).filter(([property]) => WRITABLE.has(property)));
+    if (!relayed.has(id) || Object.keys(values).length === 0) return;
+    pending.set(id, { ...pending.get(id), ...values });
+    console.log(`Command for ${id} waits for its next report: ${JSON.stringify(values)}`);
   }
 });
 
@@ -112,6 +125,14 @@ function report(device: FakeDevice, boot: boolean) {
     report_interval: device.interval,
     boot,
   });
+  // The receive window after the report: the device applies the command and reports its new state in the same wake.
+  const command = pending.get(device.id);
+  if (command && device.model === 0x0105) {
+    pending.delete(device.id);
+    const value = command.state;
+    switchState = value === true || value === 1 || value === 'ON' ? 'ON' : 'OFF';
+    report(device, false);
+  }
 }
 
 for (const device of DEVICES) {

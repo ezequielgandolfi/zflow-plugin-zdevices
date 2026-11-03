@@ -98,7 +98,13 @@ const formatSeconds = (seconds: number) => `${Math.floor(seconds / 60)}:${String
 const formatTime = (at: number | undefined) => (at ? new Date(at).toLocaleString() : undefined);
 const devicePath = (id: string) => `/zdevices/devices/${encodeURIComponent(id)}`;
 const deviceIcon = (device: { model?: string }) =>
-  device.model === 'Water detector' ? 'droplets' : device.model === 'Power meter' ? 'zap' : 'cpu';
+  device.model === 'Water detector'
+    ? 'droplets'
+    : device.model === 'Power meter'
+      ? 'zap'
+      : device.model === 'Switch'
+        ? 'toggle-left'
+        : 'cpu';
 
 function OnlineChip({ online }: { online: boolean | null }) {
   if (online === null) return <span className="chip">Not heard yet</span>;
@@ -312,6 +318,7 @@ function CentralRow({ central, running }: { central: CentralStatus; running: boo
     info.firmware && `Firmware ${info.firmware}`,
     info.channel !== undefined && `Channel ${info.channel}`,
     info.ip,
+    info.pending ? `${info.pending} waiting for a command` : undefined,
     central.lastPing && `Last ping ${formatTime(central.lastPing)}`,
   ].filter(Boolean);
 

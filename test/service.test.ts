@@ -163,6 +163,38 @@ describe('reports', () => {
   });
 });
 
+describe('commands', () => {
+  const SWITCH = 'a0b765000105';
+
+  async function withSwitch() {
+    const env = withCentral();
+    await heard(env, [{ id: SWITCH, model: 0x0105, properties: ['state', 'battery'] }]);
+    env.service.commands.pair({ id: SWITCH, name: 'Hall switch' });
+    return env;
+  }
+
+  it('pairs a switch with a writable state', async () => {
+    const { iot } = await withSwitch();
+    expect(iot.device(SWITCH)).toMatchObject({ type: 'switch', model: 'Switch' });
+    expect(iot.device(SWITCH)?.capabilities[0]).toMatchObject({ property: 'state', access: 'both', on: 'ON', off: 'OFF' });
+  });
+
+  it('sends a command, unretained, through the central that last relayed the device', async () => {
+    const env = await withSwitch();
+    const write = (values: Record<string, unknown>) => env.iot.provider!.write(env.iot.device(SWITCH)!, values);
+    await expect(write({ state: 'ON' })).rejects.toThrow(/hasn't reported/);
+
+    env.mqtt.deliver('broker', `zdevices/central-1/${SWITCH}`, { state: 'OFF', seq: 1 });
+    await write({ state: 'ON' });
+    expect(env.mqtt.lastOn(`zdevices/central-1/${SWITCH}/set`)).toMatchObject({ payload: { state: 'ON' }, retain: false });
+    // The device's next report confirms it.
+    expect(env.iot.device(SWITCH)?.state.state).toBe('OFF');
+
+    env.service.commands.unpairCentral({ central: 'central-1' });
+    await expect(write({ state: 'OFF' })).rejects.toThrow(/isn't paired/);
+  });
+});
+
 describe('removing and history', () => {
   it('removes a device and drops it from the relay list', async () => {
     const env = await withDevice();

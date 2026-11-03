@@ -31,8 +31,11 @@ once paired, every project can use them.
 | `0x0102` | Weather station | temperature, humidity, pressure, battery                       |
 | `0x0103` | Power meter     | power, voltage, current, energy, ac_frequency, power_factor    |
 | `0x0104` | Water level     | distance, battery                                              |
+| `0x0105` | Switch          | state (on/off, writable), battery                              |
 
-Devices only send readings for now; writes to them are refused. Security options for later are in
+Writable properties (only a switch's `state` for now) can be set from the device page, the Set device step or widgets.
+The command goes to the central that last relayed the device, which holds it until the device's next report (within
+its report interval); that report shows the new state. Security options for later are in
 [docs/z-security-options.md](docs/z-security-options.md).
 
 Add each change under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md); the release turns it into the version's section.

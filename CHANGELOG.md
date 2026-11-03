@@ -5,6 +5,9 @@
 ## 0.3.3 (2026-11-03)
 
 - Fix component styling
+- Switches (model `0x0105`) can be turned on and off: the command goes through the central that last relayed the
+  device, which holds it until the device's next report, and that report shows the new state
+- Paired centrals show how many devices have a command waiting
 
 ## 0.3.2 (2026-11-03)
 

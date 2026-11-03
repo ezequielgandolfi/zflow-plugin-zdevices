@@ -12,7 +12,7 @@ import {
 } from './protocol.ts';
 import { asSettings, type Settings } from './settings.ts';
 import { centralsOf, detailsOf, linksOf, toDetails, type Details } from './store.ts';
-import { deviceId, IOT, MQTT, type IotService, type MqttEvent, type MqttService } from './zflow-plugins.ts';
+import { deviceId, IOT, MQTT, type Device, type IotService, type MqttEvent, type MqttService } from './zflow-plugins.ts';
 
 /** A central counts as reachable while its pings (every 60 s) keep arriving. */
 export const DISCOVERY_WINDOW = 3 * 60_000;
@@ -216,9 +216,7 @@ export class ZDevicesService implements ServiceInstance {
   private provide(): void {
     const days = this.settings.historyDays;
     this.unregister = this.iot().registerProvider(PROVIDER, {
-      write: (device) => {
-        throw new Error(`"${device.name}" only sends readings; Z Devices can't be controlled yet`);
-      },
+      write: (device, values) => this.command(device, values),
       history: days === undefined ? {} : { days },
     });
   }
@@ -408,6 +406,26 @@ export class ZDevicesService implements ServiceInstance {
     this.pairing.delete(externalId);
     void this.publishRelays();
     return device;
+  }
+
+  /**
+   * Sends a command through the central that last relayed the device. That central holds it until the device's next
+   * receive window, and the report that follows is the confirmation, so the state isn't changed here.
+   */
+  private async command(device: Device, values: Record<string, unknown>): Promise<void> {
+    if (this.state !== 'running') throw new Error('Turn Z Devices on to control devices');
+    const [row] = detailsOf(this.ctx.storage).rows({ where: { externalId: device.externalId }, limit: 1 });
+    const central = row ? toDetails(row).lastCentral : undefined;
+    if (!central) throw new Error(`"${device.name}" hasn't reported through a central yet, so none can reach it`);
+    if (!this.pairedCentrals().has(central)) {
+      throw new Error(`"${device.name}" last reported through "${central}", which isn't paired anymore`);
+    }
+    await this.mqtt().publish(this.settings.connection, {
+      topic: topics.command(central, device.externalId),
+      payload: values,
+      qos: 1,
+      retain: false,
+    });
   }
 
   /** The registry drops the device's history with it. */

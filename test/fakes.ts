@@ -72,13 +72,15 @@ export function memoryStorage(): PluginStorage {
 export class FakeIot implements IotService {
   private readonly storage: TableStorage;
   history: { days?: number } | undefined;
+  provider: Parameters<IotService['registerProvider']>[1] | undefined;
   reports = 0;
   constructor(storage: TableStorage) {
     this.storage = storage;
   }
   start() {}
   stop() {}
-  registerProvider(_provider: string, provider: { history?: { days?: number } }) {
+  registerProvider(_provider: string, provider: Parameters<IotService['registerProvider']>[1]) {
+    this.provider = provider;
     this.history = provider.history;
     return () => {};
   }

@@ -5,9 +5,10 @@ export const MANUFACTURER = 'Z Devices';
 
 export type PropertyKind = 'numeric' | 'binary' | 'text';
 
-type PropertySpec = Omit<Capability, 'property' | 'access'>;
+type PropertySpec = Omit<Capability, 'property' | 'access'> & { access?: Capability['access'] };
 
-// The attributes of shared/ZAttributes.h (protocol v2, section 2), by the property name the central publishes them as.
+// The attributes of shared/ZAttributes.h (protocol v2, section 1), by the property name the central publishes them as.
+// Ids 0x60–0x7F are writable, so their capabilities are `both`.
 export const PROPERTIES: Record<string, PropertySpec> = {
   temperature: { label: 'Temperature', kind: 'numeric', unit: '°C', min: -50, max: 100, step: 0.1 },
   humidity: { label: 'Humidity', kind: 'numeric', unit: '%', min: 0, max: 100, step: 0.1 },
@@ -20,6 +21,7 @@ export const PROPERTIES: Record<string, PropertySpec> = {
   power_factor: { label: 'Power factor', kind: 'numeric', min: 0, max: 1, step: 0.01 },
   water_leak: { label: 'Water leak', kind: 'binary', on: true, off: false },
   distance: { label: 'Distance', kind: 'numeric', unit: 'cm', min: 0, step: 0.1 },
+  state: { label: 'State', kind: 'binary', on: 'ON', off: 'OFF', access: 'both' },
   battery: { label: 'Battery', kind: 'numeric', unit: '%', min: 0, max: 100, health: 'battery' },
   linkquality: { label: 'Link quality', kind: 'numeric', unit: 'lqi', min: 0, max: 255, health: 'signal' },
 };
@@ -36,6 +38,7 @@ export const MODELS: Record<number, ModelSpec> = {
   0x0102: { name: 'Weather station', type: 'sensor' },
   0x0103: { name: 'Power meter', type: 'sensor' },
   0x0104: { name: 'Water level', type: 'sensor' },
+  0x0105: { name: 'Switch', type: 'switch' },
 };
 
 export const modelOf = (model: number | undefined): ModelSpec =>
@@ -63,7 +66,7 @@ export function propertyKinds(values: Record<string, unknown>): Record<string, P
 
 function capabilityOf(property: string, kind: PropertyKind): Capability {
   const spec = PROPERTIES[property];
-  if (spec) return { property, access: 'read', ...spec };
+  if (spec) return { property, ...spec, access: spec.access ?? 'read' };
   const label = property.replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase());
   return { property, label, access: 'read', kind };
 }
