@@ -56,6 +56,8 @@ export interface IotService extends ServiceInstance {
     provider: {
       write(device: Device, values: Record<string, unknown>): Promise<void> | void;
       refresh?(device: Device): Promise<void> | void;
+      /** Keeps reports as history; without `days`, forever. */
+      history?: { days?: number };
     },
   ): () => void;
   upsert(provider: string, input: DeviceInput, projectId?: string): Device;

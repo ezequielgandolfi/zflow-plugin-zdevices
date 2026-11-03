@@ -1,5 +1,6 @@
-# Run by hand from the Actions tab: bumps the version, checks and packs the plugin, commits the bump, tags it and
-# creates the GitHub release with the zflow-plugin.tgz asset the Studio installs.
+# Run by hand from the Actions tab: bumps the version, checks and packs the plugin, turns the changelog's Unreleased
+# section into the version's, commits and tags it, and creates the GitHub release with the zflow-plugin.tgz asset the
+# Studio installs.
 name: Release
 
 on:
@@ -35,6 +36,18 @@ jobs:
       - run: npm run package
       - name: Check the package has the new version
         run: test "v$(jq -r .version dist/zflow-plugin/zflow-plugin.json)" = "${{ steps.version.outputs.tag }}"
+      # The notes are what CHANGELOG.md lists under "## Unreleased", which then becomes the version's section.
+      - name: Take the notes from the changelog
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          awk '/^## /{ if (found) exit } found { print } /^## Unreleased$/{ found = 1 }' CHANGELOG.md |
+            sed '/./,$!d' > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has nothing under \"## Unreleased\". Add a line for each feature or fix first"
+            exit 1
+          fi
+          sed -i "s/^## Unreleased$/## Unreleased\n\n## ${TAG#v} ($(date -u +%F))/" CHANGELOG.md
       - name: Commit and tag the version
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -44,7 +57,7 @@ jobs:
           git commit -am "Release $TAG"
           git tag "$TAG"
           git push origin "HEAD:$GITHUB_REF_NAME" "$TAG"
-      - run: gh release create "$TAG" dist/zflow-plugin.tgz --title "$TAG" --generate-notes
+      - run: gh release create "$TAG" dist/zflow-plugin.tgz --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
         env:
           TAG: ${{ steps.version.outputs.tag }}
           GH_TOKEN: ${{ github.token }}

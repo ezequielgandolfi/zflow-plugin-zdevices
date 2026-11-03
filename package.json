@@ -12,15 +12,15 @@
     "simulate": "node scripts/simulate-central.ts"
   },
   "zflow": {
-    "sdk": "^0.1.7"
+    "sdk": "^0.1.10"
   },
   "devDependencies": {
     "@tanstack/react-query": "5.105.0",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
-    "@zflow/plugin-tools": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-plugin-tools-0.1.7.tgz",
-    "@zflow/sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-sdk-0.1.7.tgz",
-    "@zflow/studio-sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.7/zflow-studio-sdk-0.1.7.tgz",
+    "@zflow/plugin-tools": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-plugin-tools-0.1.10.tgz",
+    "@zflow/sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-sdk-0.1.10.tgz",
+    "@zflow/studio-sdk": "https://github.com/ezequielgandolfi/zflow-types/releases/download/v0.1.10/zflow-studio-sdk-0.1.10.tgz",
     "mqtt": "^5.16.1",
     "react": "19.3.1",
     "typescript": "6.0.3",

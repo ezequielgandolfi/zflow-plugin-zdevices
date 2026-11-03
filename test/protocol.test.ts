@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, propertyKinds } from '../src/catalogue.ts';
 import { normalizeDeviceId, parseMessage } from '../src/protocol.ts';
-import { parseSettings, validateSettings } from '../src/settings.ts';
+import { asSettings, validateSettings } from '../src/settings.ts';
 
 describe('parseMessage', () => {
   it('splits a report into values and protocol fields', () => {
@@ -81,13 +81,12 @@ describe('capabilities', () => {
 });
 
 describe('settings', () => {
-  it('reads the Studio list rows and defaults the retention', () => {
-    expect(parseSettings({ connections: [{ connection: 'a' }, { connection: 'a' }, {}, 'b'] })).toEqual({
-      connections: ['a', 'b'],
-      historyDays: 365,
-    });
-    expect(parseSettings({ historyDays: '30' }).historyDays).toBe(30);
+  it('defaults the retention, keeps readings forever when empty and needs a broker once enabled', () => {
+    expect(asSettings(undefined)).toEqual({ enabled: false, connection: '', historyDays: 365 });
+    expect(asSettings({ historyDays: '' }).historyDays).toBeUndefined();
+    expect(asSettings({ historyDays: '30' }).historyDays).toBe(30);
     expect(validateSettings({ historyDays: 0 })).toHaveLength(1);
-    expect(validateSettings({})).toEqual([]);
+    expect(validateSettings({ enabled: true })).toEqual(['Pick the MQTT broker the centrals publish to']);
+    expect(validateSettings({ enabled: true, connection: 'broker', historyDays: null })).toEqual([]);
   });
 });

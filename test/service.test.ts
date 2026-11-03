@@ -1,190 +1,182 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { discoveredCentrals, listZDevices, readingsOf } from '../src/store.ts';
-import { recorder, setup } from './fakes.ts';
+import { afterEach, describe, expect, it } from 'vitest';
+import { topics } from '../src/protocol.ts';
+import { detailsOf, linksOf, listZDevices } from '../src/store.ts';
+import { setup } from './fakes.ts';
 
-const MAC = 'aabbccddeeff';
-const PING = { firmware: '2.0', protocol: 2, channel: 6 };
-const REPORT = { temperature: 21.5, humidity: 40, linkquality: 180, model: 0x0102, firmware: '2.0', report_interval: 60 };
+const MAC = 'a0b765000101';
+let running: ReturnType<typeof setup> | undefined;
 
-let current: ReturnType<typeof setup> | undefined;
+function start(settings?: unknown) {
+  running = setup(settings);
+  return running;
+}
+
 afterEach(() => {
-  current?.service.stop();
-  current = undefined;
-  vi.useRealTimers();
+  running?.service.stop();
+  running = undefined;
 });
 
-/** A service with central-1 discovered and attached to project p1. */
-function attached() {
-  current = setup();
-  const { mqtt, service } = current;
-  mqtt.deliver('broker', 'zdevices/central-1/bridge/info', PING);
-  const handle = recorder();
-  const detach = service.attach('p1', 'central-1', handle);
-  return { ...current, handle, detach };
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A running service with central-1 heard and paired. */
+function withCentral() {
+  const env = start();
+  env.mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { firmware: '2.0', channel: 6 });
+  env.service.commands.pairCentral({ central: 'central-1' });
+  return env;
 }
 
-async function find(context: ReturnType<typeof attached>, central = 'central-1', devices = [{ id: MAC, model: 0x0102, properties: ['temperature', 'humidity'] }]) {
-  const pending = context.service.commands.seen({ projectId: 'p1', central });
-  const request = context.mqtt.lastOn(`zdevices/${central}/bridge/request/seen`)!;
+/** Opens pairing and has central-1 answer that it heard the given devices. */
+async function heard(env: ReturnType<typeof setup>, data: unknown[]) {
+  env.service.commands.permitJoin({});
+  const request = env.mqtt.lastOn(topics.seenRequest('central-1'))!;
   const { transaction } = request.payload as { transaction: string };
-  context.mqtt.deliver('broker', `zdevices/${central}/bridge/response/seen`, { status: 'ok', transaction, data: devices }, central);
-  return pending;
+  env.mqtt.deliver('broker', 'zdevices/central-1/bridge/response/seen', { status: 'ok', transaction, data });
+  await flush();
 }
 
-describe('discovery', () => {
-  it('lists centrals from their pings and skips what the engine published', () => {
-    current = setup();
-    const { mqtt, storage } = current;
-    expect(mqtt.listening('broker')).toBe(1);
-    mqtt.deliver('broker', 'zdevices/central-2/bridge/info', PING, null);
-    mqtt.deliver('broker', 'zdevices/central-1/bridge/info', PING);
-    expect(discoveredCentrals(storage)).toMatchObject([{ central: 'central-1', connection: 'broker', online: true, info: PING }]);
-    expect(discoveredCentrals(storage, undefined, Date.now() + 4 * 60_000)).toEqual([]);
-  });
+async function withDevice() {
+  const env = withCentral();
+  await heard(env, [{ id: MAC, model: 0x0102, properties: ['temperature'], report_interval: 60, linkquality: 150 }]);
+  env.service.commands.pair({ id: MAC, name: 'Kitchen' });
+  return env;
+}
 
-  it('follows the settings', () => {
-    current = setup();
-    const { mqtt, service } = current;
-    service.update({ connections: [{ connection: 'other' }] });
+describe('service lifecycle', () => {
+  it('stays off until enabled with a broker, and follows setting changes', () => {
+    const { service, mqtt } = start({ enabled: false, connection: 'broker' });
+    expect(service.status().state).toBe('off');
+    expect(mqtt.listening('broker')).toBe(0);
+
+    service.update({ enabled: true, connection: 'broker' });
+    expect(service.status().state).toBe('running');
+    expect(mqtt.listening('broker')).toBe(1);
+
+    service.update({ enabled: true, connection: 'other' });
     expect(mqtt.listening('broker')).toBe(0);
     expect(mqtt.listening('other')).toBe(1);
-  });
 
-  it('tells the attached integration when the central goes offline and back', () => {
-    const { mqtt, handle } = attached();
-    mqtt.disconnect('broker', 'central-1');
-    mqtt.deliver('broker', 'zdevices/central-1/bridge/state', { state: 'online' });
-    mqtt.deliver('broker', 'zdevices/central-1/bridge/info', PING);
-    expect(handle.events).toEqual([
-      { event: 'offline', central: 'central-1' },
-      { event: 'online', central: 'central-1' },
-    ]);
+    service.update({ enabled: false, connection: 'other' });
+    expect(service.status().state).toBe('off');
+    expect(mqtt.listening('other')).toBe(0);
   });
 });
 
-describe('claims', () => {
-  it('keeps a central in one project at a time', () => {
-    const { service, storage, detach } = attached();
-    expect(() => service.attach('p2', 'central-1', recorder())).toThrow(/another project/);
-    expect(() => service.attach('p1', 'central-1', recorder())).toThrow(/already has/);
-    expect(discoveredCentrals(storage)[0]?.projectId).toBe('p1');
-    detach();
-    expect(() => service.attach('p2', 'central-1', recorder())).not.toThrow();
+describe('centrals', () => {
+  it('lists the heard ones, pairs them and sends them the relay list', () => {
+    const { service, mqtt, storage } = start();
+    expect(() => service.commands.pairCentral({ central: 'central-1' })).toThrow(/heard/);
+
+    mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { firmware: '2.0', channel: 6 });
+    expect(service.status().centrals).toEqual([
+      expect.objectContaining({ central: 'central-1', paired: false, online: true, info: { firmware: '2.0', channel: 6 } }),
+    ]);
+    expect(mqtt.lastOn(topics.relays('central-1'))).toBeUndefined();
+
+    service.commands.pairCentral({ central: 'central-1' });
+    expect(service.status().centrals[0]).toMatchObject({ paired: true });
+    expect(mqtt.lastOn(topics.relays('central-1'))).toMatchObject({ payload: { devices: [] }, retain: true });
+
+    mqtt.deliver('broker', 'zdevices/central-1/bridge/state', { state: 'offline' });
+    expect(service.status().centrals[0]).toMatchObject({ online: false });
+
+    linksOf(storage).put({ central: 'central-1', externalId: MAC });
+    service.commands.unpairCentral({ central: 'central-1' });
+    expect(service.status().centrals[0]).toMatchObject({ paired: false });
+    expect(linksOf(storage).rows()).toEqual([]);
   });
 
-  it('only lets the same integration go', () => {
-    const { service, detach } = attached();
-    detach();
-    const again = service.attach('p1', 'central-1', recorder());
-    detach();
-    expect(() => service.attach('p2', 'central-1', recorder())).toThrow(/another project/);
-    again();
-  });
-
-  it('refuses commands for a central the project does not hold', async () => {
-    const { service } = attached();
-    await expect(service.commands.seen({ projectId: 'p2', central: 'central-1' })).rejects.toThrow(/isn't running/);
+  it('ignores what the engine itself published', () => {
+    const { service, mqtt } = start();
+    mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { firmware: '2.0' }, null);
+    expect(service.status().centrals).toEqual([]);
   });
 });
 
-describe('finding and adding devices', () => {
-  it('asks the central, adds a device and sends it the relay list', async () => {
-    const context = attached();
-    const { mqtt, service, storage } = context;
-    expect(mqtt.lastOn('zdevices/central-1/bridge/config/devices')).toMatchObject({ payload: { devices: [] }, retain: true });
+describe('pairing devices', () => {
+  it('needs an online paired central', () => {
+    const { service } = start();
+    expect(() => service.commands.permitJoin({})).toThrow(/Pair a central/);
+  });
 
-    expect(await find(context)).toMatchObject([{ id: MAC, modelName: 'Weather station', state: 'new' }]);
-    service.commands.add({ projectId: 'p1', central: 'central-1', id: MAC, name: 'Garden' });
+  it('lists what the centrals heard, and pairs a device on every paired central', async () => {
+    const env = withCentral();
+    env.mqtt.deliver('broker', 'zdevices/central-2/bridge/info', {}, 'central-2');
+    env.service.commands.pairCentral({ central: 'central-2' });
+    await heard(env, [{ id: MAC, model: 0x0102, properties: ['temperature', 'humidity'], linkquality: 150 }]);
 
-    expect(mqtt.lastOn('zdevices/central-1/bridge/config/devices')?.payload).toEqual({ devices: [MAC] });
-    expect(listZDevices(storage, 'p1')).toMatchObject([
-      { id: MAC, name: 'Garden', model: 'Weather station', properties: ['Temperature', 'Humidity', 'Link quality'], relays: [{ central: 'central-1' }] },
+    const status = env.service.status();
+    expect(status.joinUntil).toBeGreaterThan(Date.now());
+    expect(status.pairing).toEqual([
+      expect.objectContaining({ id: MAC, model: 0x0102, properties: ['temperature', 'humidity'], heardBy: [{ central: 'central-1', linkquality: 150 }] }),
     ]);
-    expect(await find(context)).toMatchObject([{ state: 'relayed', name: 'Garden' }]);
+
+    const device = env.service.commands.pair({ id: MAC, name: 'Kitchen' });
+    expect(device).toMatchObject({ name: 'Kitchen', externalId: MAC });
+    expect(env.service.status().pairing).toEqual([]);
+    await flush();
+    for (const central of ['central-1', 'central-2']) {
+      expect(env.mqtt.lastOn(topics.relays(central))?.payload).toEqual({ devices: [MAC] });
+    }
+
+    const listed = listZDevices(env.storage)[0]!;
+    expect(listed).toMatchObject({ name: 'Kitchen', details: { externalId: MAC, model: 0x0102 } });
+    expect(listed.links).toEqual([expect.objectContaining({ central: 'central-1', linkquality: 150 })]);
+    expect(listed.capabilities.map((capability) => capability.property)).toEqual(['temperature', 'humidity', 'linkquality']);
   });
 
-  it('times out when the central does not answer', async () => {
-    vi.useFakeTimers();
-    const { service } = attached();
-    const pending = service.commands.seen({ projectId: 'p1', central: 'central-1' });
-    vi.advanceTimersByTime(5_000);
-    await expect(pending).rejects.toThrow(/didn't answer/);
-  });
-
-  it('keeps a device while another central relays it', async () => {
-    const context = attached();
-    const { mqtt, service, storage, iot } = context;
-    mqtt.deliver('broker', 'zdevices/central-2/bridge/info', PING, 'central-2');
-    service.attach('p1', 'central-2', recorder());
-    await find(context);
-    service.commands.add({ projectId: 'p1', central: 'central-1', id: MAC, name: 'Garden' });
-    expect(await find(context, 'central-2')).toMatchObject([{ state: 'in-project' }]);
-    service.commands.add({ projectId: 'p1', central: 'central-2', id: MAC });
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1 });
-
-    service.commands.remove({ projectId: 'p1', central: 'central-1', id: MAC });
-    expect(mqtt.lastOn('zdevices/central-1/bridge/config/devices')?.payload).toEqual({ devices: [] });
-    expect(listZDevices(storage, 'p1')).toMatchObject([{ name: 'Garden', relays: [{ central: 'central-2' }] }]);
-
-    service.commands.remove({ projectId: 'p1', central: 'central-2', id: MAC });
-    expect(iot.devices('p1')).toEqual([]);
-    expect(readingsOf(storage.project('p1')).rows()).toEqual([]);
+  it('refuses a device no central heard', () => {
+    const { service } = withCentral();
+    expect(() => service.commands.pair({ id: MAC, name: 'Kitchen' })).toThrow(/heard/);
   });
 });
 
 describe('reports', () => {
-  async function withDevice() {
-    const context = attached();
-    await find(context);
-    context.service.commands.add({ projectId: 'p1', central: 'central-1', id: MAC, name: 'Garden' });
-    return context;
-  }
+  it('keeps the state and the link, once per seq', async () => {
+    const env = await withDevice();
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21.5, linkquality: 140, seq: 1 });
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21.5, linkquality: 140, seq: 1 });
 
-  it('reports the values to the registry and keeps a reading', async () => {
-    const { mqtt, iot, storage } = await withDevice();
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1 });
-    expect(iot.device('p1', MAC)).toMatchObject({ online: true, state: { temperature: 21.5, humidity: 40, linkquality: 180 } });
-    expect(readingsOf(storage.project('p1')).rows()).toMatchObject([
-      { externalId: MAC, central: 'central-1', values: { temperature: 21.5, humidity: 40, linkquality: 180 } },
-    ]);
+    expect(env.iot.device(MAC)).toMatchObject({ online: true, state: { temperature: 21.5, linkquality: 140 } });
+    expect(env.iot.reports).toBe(1);
+    expect(linksOf(env.storage).rows()).toEqual([expect.objectContaining({ central: 'central-1', linkquality: 140 })]);
+    expect(detailsOf(env.storage).rows()[0]).toMatchObject({ lastSeq: 1, lastCentral: 'central-1' });
   });
 
-  it('drops a repeated seq unless the device booted', async () => {
-    const { mqtt, storage } = await withDevice();
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1 });
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1 });
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1, boot: true });
-    expect(readingsOf(storage.project('p1')).rows()).toHaveLength(2);
+  it('ignores unpaired centrals and devices', async () => {
+    const env = await withDevice();
+    env.mqtt.deliver('broker', 'zdevices/central-9/bridge/info', {}, 'central-9');
+    env.mqtt.deliver('broker', `zdevices/central-9/${MAC}`, { temperature: 30, seq: 2 }, 'central-9');
+    env.mqtt.deliver('broker', 'zdevices/central-1/a0b765000199', { temperature: 30, seq: 2 });
+    expect(env.iot.reports).toBe(0);
+    expect(env.iot.device('a0b765000199')).toBeUndefined();
   });
 
-  it('adds the capabilities of new properties', async () => {
-    const { mqtt, iot } = await withDevice();
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, battery: 80, seq: 1 });
-    expect(iot.device('p1', MAC)?.capabilities.map((capability) => capability.property)).toEqual([
-      'temperature',
-      'humidity',
-      'battery',
-      'linkquality',
-    ]);
+  it('marks a device offline after two report intervals plus a minute', async () => {
+    const env = await withDevice();
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21.5, seq: 1 });
+    const reported = detailsOf(env.storage).rows()[0]!.lastReport as number;
+    env.service.checkAvailability(reported + 180_000);
+    expect(env.iot.device(MAC)?.online).toBe(true);
+    env.service.checkAvailability(reported + 180_001);
+    expect(env.iot.device(MAC)?.online).toBe(false);
+  });
+});
+
+describe('removing and history', () => {
+  it('removes a device and drops it from the relay list', async () => {
+    const env = await withDevice();
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21.5, seq: 1 });
+    env.service.commands.remove({ id: MAC });
+    expect(listZDevices(env.storage)).toEqual([]);
+    expect(linksOf(env.storage).rows()).toEqual([]);
+    expect(env.mqtt.lastOn(topics.relays('central-1'))?.payload).toEqual({ devices: [] });
   });
 
-  it('ignores devices the central does not relay, telling the integration once', async () => {
-    const { mqtt, handle, storage } = await withDevice();
-    mqtt.deliver('broker', 'zdevices/central-1/112233445566', { ...REPORT, model: 0x0101, seq: 1 });
-    mqtt.deliver('broker', 'zdevices/central-1/112233445566', { ...REPORT, model: 0x0101, seq: 2 });
-    expect(handle.events).toEqual([{ event: 'unknown-device', central: 'central-1', device: '112233445566', model: 'Water detector' }]);
-    expect(readingsOf(storage.project('p1')).rows()).toHaveLength(0);
-  });
-
-  it('marks a device offline once it misses its reports, and prunes old readings', async () => {
-    const { mqtt, iot, service, storage } = await withDevice();
-    mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { ...REPORT, seq: 1 });
-    service.checkAvailability(Date.now() + 179_000);
-    expect(iot.device('p1', MAC)?.online).toBe(true);
-    service.checkAvailability(Date.now() + 181_000);
-    expect(iot.device('p1', MAC)?.online).toBe(false);
-
-    service.applyRetention(Date.now() + 366 * 24 * 60 * 60_000);
-    expect(readingsOf(storage.project('p1')).rows()).toHaveLength(0);
+  it('has the registry keep history for the set days, or forever when empty', () => {
+    const { iot, service } = start();
+    expect(iot.history).toEqual({ days: 365 });
+    service.update({ enabled: true, connection: 'broker', historyDays: '' });
+    expect(iot.history).toEqual({});
   });
 });

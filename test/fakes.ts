@@ -1,5 +1,5 @@
 import type { Logger, PluginStorage, ServiceContext, StoredRow, TableSchema, TableStorage } from '@zflow/sdk';
-import { ZDevicesService, type CentralEvent, type CentralHandle } from '../src/service.ts';
+import { ZDevicesService } from '../src/service.ts';
 import {
   deviceId,
   type Device,
@@ -68,56 +68,59 @@ export function memoryStorage(): PluginStorage {
   };
 }
 
-/** Keeps project devices in the iot plugin's tables, as the real registry does, so the plugin's listing reads them. */
+/** Keeps global devices in the iot plugin's tables, as the real registry does, so the plugin's listing reads them. */
 export class FakeIot implements IotService {
-  private readonly storage: PluginStorage;
-  constructor(storage: PluginStorage) {
+  private readonly storage: TableStorage;
+  history: { days?: number } | undefined;
+  reports = 0;
+  constructor(storage: TableStorage) {
     this.storage = storage;
   }
   start() {}
   stop() {}
-  registerProvider() {
+  registerProvider(_provider: string, provider: { history?: { days?: number } }) {
+    this.history = provider.history;
     return () => {};
   }
-  devices(projectId?: string, filter: { provider?: string } = {}): Device[] {
-    if (!projectId || !this.storage.project(projectId).tables().includes('devices')) return [];
-    return this.table(projectId)
+  devices(_projectId?: string, filter: { provider?: string } = {}): Device[] {
+    if (!this.storage.tables().includes('devices')) return [];
+    return this.table()
       .rows({ where: { ...(filter.provider && { provider: filter.provider }) } })
-      .map((row) => ({ ...(row as unknown as Device), id: deviceId(row.provider as string, row.externalId as string), projectId }));
+      .map((row) => ({ ...(row as unknown as Device), id: deviceId(row.provider as string, row.externalId as string) }));
   }
-  device(projectId: string, externalId: string): Device | undefined {
-    return this.devices(projectId).find((device) => device.externalId === externalId);
+  device(externalId: string): Device | undefined {
+    return this.devices().find((device) => device.externalId === externalId);
   }
-  upsert(provider: string, input: DeviceInput, projectId?: string): Device {
-    const existing = this.device(projectId!, input.externalId);
+  upsert(provider: string, input: DeviceInput): Device {
+    const existing = this.device(input.externalId);
     const device = { state: {}, online: null, addedAt: 1, ...existing, ...input, provider, name: existing?.name ?? input.name };
-    return this.save(projectId!, device as Device);
+    return this.save(device as Device);
   }
-  report(provider: string, externalId: string, report: DeviceReport, projectId?: string): Device | undefined {
-    const existing = this.device(projectId!, externalId);
+  report(_provider: string, externalId: string, report: DeviceReport): Device | undefined {
+    const existing = this.device(externalId);
     if (!existing) return undefined;
-    return this.save(projectId!, {
+    if (report.state) this.reports++;
+    return this.save({
       ...existing,
       state: { ...existing.state, ...report.state },
       ...(report.online !== undefined && { online: report.online }),
       ...(report.state && { lastSeen: report.at }),
     });
   }
-  rename(id: string, name: string, projectId?: string): Device {
-    return this.save(projectId!, { ...this.devices(projectId).find((candidate) => candidate.id === id)!, name });
+  rename(id: string, name: string): Device {
+    return this.save({ ...this.devices().find((candidate) => candidate.id === id)!, name });
   }
-  remove(provider: string, externalId: string, projectId?: string) {
-    this.table(projectId!).delete({ where: { provider, externalId } });
+  remove(provider: string, externalId: string) {
+    this.table().delete({ where: { provider, externalId } });
   }
-  private save(projectId: string, device: Device): Device {
+  private save(device: Device): Device {
     const row: Record<string, unknown> = { ...device };
     delete row.id;
-    delete row.projectId;
-    this.table(projectId).put(row);
-    return { ...device, id: deviceId(device.provider, device.externalId), projectId };
+    this.table().put(row);
+    return { ...device, id: deviceId(device.provider, device.externalId) };
   }
-  private table(projectId: string) {
-    return this.storage.project(projectId).table('devices', { columns: {}, key: ['provider', 'externalId'] });
+  private table() {
+    return this.storage.table('devices', { columns: {}, key: ['provider', 'externalId'] });
   }
 }
 
@@ -154,7 +157,7 @@ export class FakeMqtt implements MqttService {
 
 const silent: Logger = { debug() {}, info() {}, warn() {}, error() {} };
 
-export function setup(settings: unknown = { connections: [{ connection: 'broker' }], historyDays: 365 }) {
+export function setup(settings: unknown = { enabled: true, connection: 'broker', historyDays: 365 }) {
   const storage = memoryStorage();
   const iot = new FakeIot(storage.of('iot'));
   const mqtt = new FakeMqtt();
@@ -169,9 +172,4 @@ export function setup(settings: unknown = { connections: [{ connection: 'broker'
   const service = new ZDevicesService(ctx);
   service.start();
   return { storage, iot, mqtt, service };
-}
-
-export function recorder(): CentralHandle & { events: CentralEvent[] } {
-  const events: CentralEvent[] = [];
-  return { events, emit: (event) => void events.push(event) };
 }

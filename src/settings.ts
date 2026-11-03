@@ -1,29 +1,31 @@
 export interface Settings {
-  /** The MQTT connections the service listens to for centrals. */
-  connections: string[];
-  /** How long readings are kept. */
-  historyDays: number;
+  enabled: boolean;
+  /** The MQTT connection (from the MQTT page) the centrals publish to. */
+  connection: string;
+  /** How long readings are kept; empty keeps them forever. */
+  historyDays?: number;
 }
 
-export const DEFAULT_HISTORY_DAYS = 365;
-export const DEFAULT_SETTINGS = { connections: [], historyDays: DEFAULT_HISTORY_DAYS };
+export const DEFAULT_SETTINGS: Settings = { enabled: false, connection: '', historyDays: 365 };
 
-/** Settings as the Studio saves them: the connections are a `list` of `{ connection }` rows. */
-export function parseSettings(raw: unknown): Settings {
-  const fields = (raw ?? {}) as { connections?: unknown; historyDays?: unknown };
-  const rows = Array.isArray(fields.connections) ? fields.connections : [];
-  const connections = rows
-    .map((row) => (typeof row === 'string' ? row : (row as { connection?: unknown } | null)?.connection))
-    .filter((connection): connection is string => typeof connection === 'string' && connection !== '');
-  const days = Number(fields.historyDays);
-  return {
-    connections: [...new Set(connections)],
-    historyDays: Number.isFinite(days) && days >= 1 ? Math.floor(days) : DEFAULT_HISTORY_DAYS,
+export function asSettings(raw: unknown): Settings {
+  const fields = { ...DEFAULT_SETTINGS, ...(raw as Partial<Settings> | undefined) };
+  const days = fields.historyDays as unknown;
+  const settings: Settings = {
+    enabled: fields.enabled === true,
+    connection: typeof fields.connection === 'string' ? fields.connection : '',
   };
+  if (days !== undefined && days !== null && days !== '') settings.historyDays = Number(days);
+  return settings;
 }
 
 export function validateSettings(raw: unknown): string[] {
-  const days = (raw as { historyDays?: unknown } | null)?.historyDays;
-  if (days === undefined || days === null || days === '') return [];
-  return Number.isFinite(Number(days)) && Number(days) >= 1 ? [] : ['Keep readings for at least 1 day'];
+  const settings = asSettings(raw);
+  const issues: string[] = [];
+  if (settings.enabled && !settings.connection) issues.push('Pick the MQTT broker the centrals publish to');
+  const days = settings.historyDays;
+  if (days !== undefined && (!Number.isInteger(days) || days < 1)) {
+    issues.push('Keep readings for at least one whole day, or leave it empty to keep them forever');
+  }
+  return issues;
 }
