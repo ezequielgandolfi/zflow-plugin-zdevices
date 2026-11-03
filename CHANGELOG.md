@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.2 (2026-11-03)
+
 - New **Z Devices** page in the main menu, like the Zigbee page: turn the service on or off, pick the one MQTT broker
   the centrals publish to, and set how long readings are kept (365 days by default, empty keeps them forever)
 - Centrals and devices are global, so every project can use them; centrals are paired from the page, and every paired
