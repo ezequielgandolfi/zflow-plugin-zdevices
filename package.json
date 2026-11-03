@@ -1,6 +1,6 @@
 {
   "name": "zflow-plugin-zdevices",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "zflow plugin that keeps a project's Z Devices in the IoT device registry",
   "type": "module",
