@@ -1,6 +1,8 @@
-# Changelog
+\# Changelog
 
 ## Unreleased
+
+- Fix component styling
 
 ## 0.3.2 (2026-11-03)
 
