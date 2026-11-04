@@ -24,6 +24,15 @@ once paired, every project can use them.
   report arrives for `2 × report_interval + 60 s`.
 - **History** is kept by the Devices plugin, so its **Device history** and **Device activity** widgets show Z Devices.
 - **Overview card:** whether the service runs, how many centrals are online and devices offline.
+- **Blueprints** ("Add from blueprint" on a project page), each offering only the Z Devices it fits:
+  - **Water leak alert:** notifies when a water detector finds a leak.
+  - **Low water alert:** notifies when a water level sensor measures the water further down than a limit.
+  - **Power meter:** a dashboard group with a power gauge, the energy, voltage and current, and a power chart.
+
+  The alerts add their notification to the project's Notifications integration, so they need zflow's `notify`
+  plugin; the dashboard one needs `dashboards`. Both are optional dependencies: without them only those blueprints
+  are disabled. The iot plugin's own blueprints (Device dashboard, Climate sensor, Mirror a device) work for Z Devices
+  too.
 
 | Model    | Device          | Properties                                                     |
 | -------- | --------------- | -------------------------------------------------------------- |

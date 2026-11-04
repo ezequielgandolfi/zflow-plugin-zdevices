@@ -1,4 +1,4 @@
-\# Changelog
+# Changelog
 
 ## Unreleased
 
@@ -6,7 +6,11 @@
   silent and coming back, speaking another protocol or dropping messages, not answering during pairing or not getting
   their relay list; devices rejoining, missing reports or reporting through an unpaired central; commands that couldn't
   be sent; the broker not being reachable; and messages that couldn't be read or handled
-- Needs SDK 0.1.12
+- New blueprints, under "Add from blueprint" on a project page: **Water leak alert** and **Low water alert** send a
+  notification through the project's Notifications integration, and **Power meter** adds a dashboard group with a
+  power gauge, the energy, voltage and current, and a power chart. Each one only offers the Z Devices it fits
+- `dashboards` and `notify` are optional dependencies: without them, only the blueprints that need them are disabled
+- Needs SDK 0.1.14
 
 ## 0.3.3 (2026-11-03)
 

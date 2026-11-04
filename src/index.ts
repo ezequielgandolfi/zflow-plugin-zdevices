@@ -1,5 +1,6 @@
 import { definePlugin, type PluginActionContext } from '@zflow/sdk';
 import packageJson from '../package.json' with { type: 'json' };
+import { blueprintOptions, blueprints } from './blueprints.ts';
 import { PROVIDER } from './catalogue.ts';
 import { normalizeDeviceId } from './protocol.ts';
 import { zDevicesService } from './service.ts';
@@ -16,9 +17,15 @@ export default definePlugin({
   name: 'Z Devices',
   description: 'Pairs Z Centrals and the Z Devices they relay over MQTT, keeping their history',
   version: packageJson.version,
-  dependencies: { iot: '0.1.0', mqtt: '0.1.0' },
+  dependencies: {
+    iot: '0.1.0',
+    mqtt: '0.1.0',
+    dashboards: { version: '0.1.0', optional: true },
+    notify: { version: '0.1.0', optional: true },
+  },
   service: zDevicesService,
-  settings: { defaults: DEFAULT_SETTINGS, validate: validateSettings },
+  projects: { blueprints },
+  settings: { defaults: DEFAULT_SETTINGS, validate: validateSettings, options: blueprintOptions },
   actions: {
     devices: ({ storage }) => listZDevices(storage),
     permitJoin: forward('permitJoin'),
