@@ -1,6 +1,7 @@
 // MQTT side of Z Devices protocol v2 (firmware PROTOCOL.md, section 3).
 
 export const ROOT = 'zdevices';
+export const PROTOCOL = 2;
 
 const CENTRAL_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const DEVICE_ID = /^[0-9a-f]{12}$/;

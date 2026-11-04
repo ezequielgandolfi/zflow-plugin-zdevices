@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { defineService, type ServiceContext, type ServiceInstance } from '@zflow/sdk';
+import { defineService, type EventInput, type ServiceContext, type ServiceInstance } from '@zflow/sdk';
 import { capabilitiesOf, MANUFACTURER, modelOf, PROPERTIES, PROVIDER, propertyKinds, type PropertyKind } from './catalogue.ts';
 import {
   normalizeDeviceId,
   parseMessage,
+  PROTOCOL,
   ROOT,
   topics,
   type CentralInfo,
@@ -60,6 +61,8 @@ interface Heard {
   online: boolean;
   info: CentralInfo;
   lastPing: number;
+  /** Its pings stopped without it saying it went offline. */
+  silent?: boolean;
 }
 
 interface Pending {
@@ -183,14 +186,20 @@ export class ZDevicesService implements ServiceInstance {
   }
 
   handle(event: MqttEvent): void {
-    if (event.event === 'disconnected') {
-      const heard = this.heard.get(event.clientId);
-      if (heard) this.heard.set(event.clientId, { ...heard, online: false });
-      return;
-    }
+    if (event.event === 'disconnected') return this.markOffline(event.clientId);
     if (event.event !== 'message' || event.clientId === null || !event.topic.startsWith(`${ROOT}/`)) return;
     const message = parseMessage(event.topic, event.payload);
-    if (!message) return;
+    if (!message) {
+      if (!SENT_TO_CENTRALS.test(event.topic)) {
+        this.record({
+          type: 'warning',
+          reason: 'UnreadableMessage',
+          message: "Got a Z Devices message that isn't protocol v2",
+          data: { topic: event.topic, from: event.clientId },
+        });
+      }
+      return;
+    }
     switch (message.kind) {
       case 'state':
         if (message.online) this.noteAlive(message.central, this.heard.get(message.central)?.info ?? {});
@@ -233,7 +242,12 @@ export class ZDevicesService implements ServiceInstance {
     } catch (error) {
       this.state = 'failed';
       this.error = `Couldn't listen to the MQTT broker: ${(error as Error).message}`;
-      this.ctx.logger.warn(this.error);
+      this.record({
+        type: 'error',
+        reason: 'BrokerUnavailable',
+        message: "Couldn't listen to the MQTT broker",
+        data: { connection: this.settings.connection, error: (error as Error).message },
+      });
     }
   }
 
@@ -252,15 +266,43 @@ export class ZDevicesService implements ServiceInstance {
   }
 
   private noteAlive(central: string, info: CentralInfo): void {
+    const now = Date.now();
     const known = this.heard.get(central);
-    this.heard.set(central, { online: true, info, lastPing: Date.now() });
+    this.heard.set(central, { online: true, info, lastPing: now });
+    if (!this.pairedCentrals().has(central)) return;
     // A central heard for the first time (or back after a restart of zflow) gets the relay list again.
-    if (!known && this.pairedCentrals().has(central)) void this.publishRelays(central);
+    if (!known) void this.publishRelays(central);
+    else if (!known.online || known.silent) {
+      this.record({ reason: 'CentralOnline', message: 'Central is back online', object: centralObject(central) });
+    }
+    if (info.protocol !== undefined && info.protocol !== PROTOCOL && known?.info.protocol !== info.protocol) {
+      this.record({
+        type: 'error',
+        reason: 'ProtocolMismatch',
+        message: `Central speaks another protocol version than v${PROTOCOL}`,
+        object: centralObject(central),
+        data: { protocol: info.protocol, firmware: info.firmware },
+      });
+    }
+    const before = known?.info.dropped;
+    if (info.dropped !== undefined && before !== undefined && info.dropped > before) {
+      this.record({
+        type: 'warning',
+        reason: 'DroppedMessages',
+        message: 'Central dropped device messages',
+        object: centralObject(central),
+        data: { dropped: info.dropped, new: info.dropped - before },
+      });
+    }
   }
 
   private markOffline(central: string): void {
     const known = this.heard.get(central);
-    if (known) this.heard.set(central, { ...known, online: false });
+    if (!known) return;
+    this.heard.set(central, { ...known, online: false });
+    if (known.online && this.pairedCentrals().has(central)) {
+      this.record({ type: 'warning', reason: 'CentralOffline', message: 'Central went offline', object: centralObject(central) });
+    }
   }
 
   private pairedCentrals(): Set<string> {
@@ -287,7 +329,13 @@ export class ZDevicesService implements ServiceInstance {
           retain: true,
         });
       } catch (error) {
-        this.ctx.logger.warn(`Couldn't send "${central}" its relay list: ${(error as Error).message}`);
+        this.record({
+          type: 'error',
+          reason: 'RelaysNotSent',
+          message: "Couldn't send the central its relay list, so it may not answer paired devices",
+          object: centralObject(central),
+          data: { devices: devices.length, error: (error as Error).message },
+        });
       }
     }
   }
@@ -319,7 +367,15 @@ export class ZDevicesService implements ServiceInstance {
       for (const central of this.onlineCentrals()) {
         this.requestSeen(central, PAIRING_SINCE)
           .then((devices) => this.notePairing(central, devices))
-          .catch((error: Error) => this.ctx.logger.debug(`"${central}" didn't list what it heard: ${error.message}`));
+          .catch((error: Error) =>
+            this.record({
+              type: 'warning',
+              reason: 'CentralNoAnswer',
+              message: "Central didn't list the devices it heard",
+              object: centralObject(central),
+              data: { error: error.message },
+            }),
+          );
       }
     };
     poll();
@@ -420,12 +476,23 @@ export class ZDevicesService implements ServiceInstance {
     if (!this.pairedCentrals().has(central)) {
       throw new Error(`"${device.name}" last reported through "${central}", which isn't paired anymore`);
     }
-    await this.mqtt().publish(this.settings.connection, {
-      topic: topics.command(central, device.externalId),
-      payload: values,
-      qos: 1,
-      retain: false,
-    });
+    try {
+      await this.mqtt().publish(this.settings.connection, {
+        topic: topics.command(central, device.externalId),
+        payload: values,
+        qos: 1,
+        retain: false,
+      });
+    } catch (error) {
+      this.record({
+        type: 'error',
+        reason: 'CommandFailed',
+        message: "Couldn't send the device a command",
+        object: { kind: 'device', id: device.id, name: device.name },
+        data: { central, values, error: (error as Error).message },
+      });
+      throw error;
+    }
   }
 
   /** The registry drops the device's history with it. */
@@ -438,14 +505,24 @@ export class ZDevicesService implements ServiceInstance {
   }
 
   private report(central: string, externalId: string, report: ReportMessage): void {
-    if (!this.pairedCentrals().has(central)) return;
     const storage = this.ctx.storage;
     const details = detailsOf(storage);
     const [row] = details.rows({ where: { externalId }, limit: 1 });
     if (!row) return;
+    if (!this.pairedCentrals().has(central)) {
+      this.record({
+        type: 'warning',
+        reason: 'UnpairedCentral',
+        message: "Device reported through a central that isn't paired, so the report was ignored",
+        object: this.deviceObject(externalId),
+        data: { central },
+      });
+      return;
+    }
     const known = toDetails(row);
     // A device sends each report once, to one central; the same seq again is a radio retry.
     if (!report.boot && report.seq !== undefined && known.lastSeq === report.seq) return;
+    this.noteSequence(central, known, report);
 
     const now = Date.now();
     const next: Details = {
@@ -500,8 +577,45 @@ export class ZDevicesService implements ServiceInstance {
     });
   }
 
+  private noteSequence(central: string, known: Details, report: ReportMessage): void {
+    if (report.boot) {
+      if (known.lastReport === undefined) return;
+      this.record({
+        reason: 'Rejoined',
+        message: 'Device restarted and rejoined',
+        object: this.deviceObject(known.externalId),
+        data: { central, firmware: report.firmware ?? known.firmware },
+      });
+      return;
+    }
+    if (report.seq === undefined || known.lastSeq === undefined) return;
+    const missed = report.seq - known.lastSeq - 1;
+    // A smaller seq is the counter wrapping, not a loss.
+    if (missed > 0) {
+      this.record({
+        type: 'warning',
+        reason: 'MissedReports',
+        message: "Some of the device's reports didn't arrive",
+        object: this.deviceObject(known.externalId),
+        data: { missed, central, linkquality: report.linkquality },
+      });
+    }
+  }
+
   checkAvailability(now = Date.now()): void {
     if (this.state !== 'running') return;
+    for (const central of this.pairedCentrals()) {
+      const heard = this.heard.get(central);
+      if (!heard?.online || heard.silent || recent(heard, now)) continue;
+      this.heard.set(central, { ...heard, silent: true });
+      this.record({
+        type: 'warning',
+        reason: 'CentralSilent',
+        message: 'Central stopped pinging',
+        object: centralObject(central),
+        data: { lastPing: heard.lastPing },
+      });
+    }
     const online = new Set(
       this.iot()
         .devices(undefined, { provider: PROVIDER })
@@ -521,8 +635,23 @@ export class ZDevicesService implements ServiceInstance {
     try {
       run();
     } catch (error) {
-      this.ctx.logger.error(`Couldn't handle a Z Devices message: ${(error as Error).message}`);
+      this.record({
+        type: 'error',
+        reason: 'MessageFailed',
+        message: "Couldn't handle a Z Devices message",
+        data: { error: (error as Error).message },
+      });
     }
+  }
+
+  private record(event: EventInput): void {
+    this.ctx.events.record(event);
+  }
+
+  private deviceObject(externalId: string) {
+    const id = deviceId(PROVIDER, externalId);
+    const device = this.iot().devices(undefined, { provider: PROVIDER }).find((candidate) => candidate.id === id);
+    return { kind: 'device', id, name: device?.name ?? externalId };
   }
 
   private iot() {
@@ -535,6 +664,11 @@ export class ZDevicesService implements ServiceInstance {
 }
 
 const recent = (heard: Heard, now: number) => now - heard.lastPing <= DISCOVERY_WINDOW;
+
+/** Topics zflow publishes to the centrals, which come back to it too. */
+const SENT_TO_CENTRALS = /\/(bridge\/(config|request)\/.+|[0-9a-f]{12}\/set)$/;
+
+const centralObject = (central: string) => ({ kind: 'central', id: central, name: central });
 
 function centralOf(input: unknown): string {
   const { central } = (input ?? {}) as { central?: unknown };

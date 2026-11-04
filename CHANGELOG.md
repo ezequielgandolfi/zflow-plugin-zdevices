@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Records events for the Admin page, the device pages and the diagnostics file: paired centrals going offline, going
+  silent and coming back, speaking another protocol or dropping messages, not answering during pairing or not getting
+  their relay list; devices rejoining, missing reports or reporting through an unpaired central; commands that couldn't
+  be sent; the broker not being reachable; and messages that couldn't be read or handled
+- Needs SDK 0.1.12
+
 ## 0.3.3 (2026-11-03)
 
 - Fix component styling

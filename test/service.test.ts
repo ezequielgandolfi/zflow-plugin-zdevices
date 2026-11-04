@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { topics } from '../src/protocol.ts';
+import { DISCOVERY_WINDOW } from '../src/service.ts';
 import { detailsOf, linksOf, listZDevices } from '../src/store.ts';
 import { setup } from './fakes.ts';
 
@@ -210,5 +211,60 @@ describe('removing and history', () => {
     expect(iot.history).toEqual({ days: 365 });
     service.update({ enabled: true, connection: 'broker', historyDays: '' });
     expect(iot.history).toEqual({});
+  });
+});
+
+describe('events', () => {
+  const reasons = (env: ReturnType<typeof setup>) => env.events.map((event) => event.reason);
+
+  it('follows paired centrals going offline, silent and back', () => {
+    const env = withCentral();
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/state', { state: 'offline' });
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/state', { state: 'online' });
+    env.service.checkAvailability(Date.now() + DISCOVERY_WINDOW + 1);
+    env.service.checkAvailability(Date.now() + DISCOVERY_WINDOW + 2);
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { protocol: 2 });
+    expect(reasons(env)).toEqual(['CentralOffline', 'CentralOnline', 'CentralSilent', 'CentralOnline']);
+    expect(env.events[0]).toMatchObject({ type: 'warning', object: { kind: 'central', id: 'central-1' } });
+  });
+
+  it('warns about a central on another protocol or dropping messages', () => {
+    const env = withCentral();
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { protocol: 3, dropped: 0 });
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/info', { protocol: 3, dropped: 4 });
+    expect(reasons(env)).toEqual(['ProtocolMismatch', 'DroppedMessages']);
+    expect(env.events[1]?.data).toMatchObject({ dropped: 4, new: 4 });
+  });
+
+  it('notes devices rejoining, missing reports or reporting through unpaired centrals', async () => {
+    const env = await withDevice();
+    const device = { kind: 'device', id: `zdevices:${MAC}`, name: 'Kitchen' };
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21, seq: 1 });
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21, seq: 4 });
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21, seq: 1, boot: true });
+    env.mqtt.deliver('broker', `zdevices/central-9/${MAC}`, { temperature: 21, seq: 2 }, 'central-9');
+    expect(env.events).toEqual([
+      expect.objectContaining({ reason: 'MissedReports', object: device, data: expect.objectContaining({ missed: 2 }) }),
+      expect.objectContaining({ reason: 'Rejoined', object: device }),
+      expect.objectContaining({ reason: 'UnpairedCentral', object: device }),
+    ]);
+  });
+
+  it("warns about messages it can't read, but not about its own", async () => {
+    const env = await withDevice();
+    await env.service.publishRelays();
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}/set`, { state: 'ON' });
+    env.mqtt.deliver('broker', 'zdevices/central-1/bridge/state', 'online');
+    expect(reasons(env)).toEqual(['UnreadableMessage']);
+  });
+
+  it('records commands that fail to send', async () => {
+    const env = await withDevice();
+    env.mqtt.deliver('broker', `zdevices/central-1/${MAC}`, { temperature: 21, seq: 1 });
+    env.mqtt.publish = async () => {
+      throw new Error('broker down');
+    };
+    await expect(env.iot.provider!.write(env.iot.device(MAC)!, { state: 'ON' })).rejects.toThrow('broker down');
+    expect(env.events.at(-1)).toMatchObject({ type: 'error', reason: 'CommandFailed' });
   });
 });

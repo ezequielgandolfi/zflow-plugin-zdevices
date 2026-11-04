@@ -1,4 +1,4 @@
-import type { Logger, PluginStorage, ServiceContext, StoredRow, TableSchema, TableStorage } from '@zflow/sdk';
+import type { EventInput, Logger, PluginStorage, ServiceContext, StoredRow, TableSchema, TableStorage } from '@zflow/sdk';
 import { ZDevicesService } from '../src/service.ts';
 import {
   deviceId,
@@ -163,15 +163,17 @@ export function setup(settings: unknown = { enabled: true, connection: 'broker',
   const storage = memoryStorage();
   const iot = new FakeIot(storage.of('iot'));
   const mqtt = new FakeMqtt();
+  const events: EventInput[] = [];
   const ctx: ServiceContext = {
     pluginId: 'zdevices',
     settings,
     logger: silent,
+    events: { record: (event) => void events.push(event) },
     storage,
     dataDir: '/tmp',
     service: <T,>(id: string) => (id === 'iot' ? iot : mqtt) as T,
   };
   const service = new ZDevicesService(ctx);
   service.start();
-  return { storage, iot, mqtt, service };
+  return { storage, iot, mqtt, service, events };
 }
