@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.4 (2026-11-04)
+
 - Records events for the Admin page, the device pages and the diagnostics file: paired centrals going offline, going
   silent and coming back, speaking another protocol or dropping messages, not answering during pairing or not getting
   their relay list; devices rejoining, missing reports or reporting through an unpaired central; commands that couldn't
